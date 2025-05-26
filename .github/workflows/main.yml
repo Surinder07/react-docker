@@ -1,39 +1,53 @@
-name: CI
+name: CI/CD
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
   pull_request:
-    branches: [master]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build Docker image
-        run: docker build -t surinder0322/react-docker -f Dockerfile.dev .
+        run: docker build -t surinder0322/docker-react -f Dockerfile.dev .
 
-      - name: Run tests in Docker container
-        run: docker run -e CI=true surinder0322/react-docker npm run test
+      - name: Run tests
+        run: docker run -e CI=true surinder0322/docker-react npm run test
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
+          aws-region: us-east-1
 
       - name: Zip source bundle
-        run: zip -r deploy.zip . -x '*.git*' 'node_modules/*' # Adjust as needed
+        run: zip -r Frontend.zip . -x ".git/*" ".github/*"
 
-      - name: Deploy to Elastic Beanstalk
-        uses: einaregilsson/beanstalk-deploy@v21
-        with:
-          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: 'Frontend'
-          environment_name: 'Frontend-env'
-          region: 'us-east-1'
-          version_label: ${{ github.sha }}
-          deployment_package: deploy.zip
-          use_existing_version_if_available: true
+      - name: Upload to S3 and deploy to Elastic Beanstalk
+        run: |
+          aws s3 cp Frontend.zip s3://elasticbeanstalk-us-east-1-180294210078/Frontend/Frontend.zip
+          aws elasticbeanstalk create-application-version --application-name Frontend \
+            --version-label $GITHUB_SHA \
+            --source-bundle S3Bucket=elasticbeanstalk-us-east-1-180294210078,S3Key=Frontend/Frontend.zip
+          aws elasticbeanstalk update-environment --environment-name Frontend-env \
+            --version-label $GITHUB_SHA
