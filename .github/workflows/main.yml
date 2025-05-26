@@ -22,3 +22,19 @@ jobs:
 
       - name: Run tests in Docker container
         run: docker run -e CI=true surinder0322/react-docker npm run test
+
+      - name: Zip source bundle
+        run: zip -r deploy.zip . -x '*.git*' 'node_modules/*' # Adjust as needed
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v21
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: 'Frontend'
+          environment_name: 'Frontend-env'
+          region: 'us-east-1'
+          version_label: ${{ github.sha }}
+          deployment_package: deploy.zip
+          bucket_name: 'elasticbeanstalk-us-east-1-180294210078'
+          bucket_key: 'Frontend/deploy-${{ github.sha }}.zip'
