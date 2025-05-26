@@ -36,5 +36,4 @@ jobs:
           region: 'us-east-1'
           version_label: ${{ github.sha }}
           deployment_package: deploy.zip
-          bucket_name: 'elasticbeanstalk-us-east-1-180294210078'
-          bucket_key: 'Frontend/deploy-${{ github.sha }}.zip'
+          use_existing_version_if_available: true
